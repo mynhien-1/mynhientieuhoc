@@ -1,0 +1,210 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role and department assignment",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Full name of teacher or staff" },
+        "photoURL": { "type": "string", "description": "Avatar URL" },
+        "role": { "type": "string", "enum": ["admin", "vice_principal", "lead", "teacher"], "description": "RBAC role" },
+        "departmentId": { "type": "string", "description": "Assigned grade block (khoi_1 to khoi_5)" },
+        "departmentName": { "type": "string", "description": "Name of grade block" },
+        "status": { "type": "string", "enum": ["pending", "active", "disabled"], "description": "Account approval status" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "createdAt": { "type": "string", "description": "Timestamp ISO string or server timestamp" },
+        "updatedAt": { "type": "string", "description": "Timestamp ISO string or server timestamp" }
+      },
+      "required": ["uid", "email", "displayName", "role", "status"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Marker document for admin check in firestore rules",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Grade block organizational unit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID such as khoi_1, khoi_2" },
+        "name": { "type": "string", "description": "Display name e.g. Khối 1" },
+        "gradeNumber": { "type": "number", "description": "1 through 5" },
+        "leadUid": { "type": "string", "description": "UID of department head" },
+        "leadName": { "type": "string", "description": "Name of department head" },
+        "description": { "type": "string", "description": "Block description" },
+        "updatedAt": { "type": "string", "description": "Last updated" }
+      },
+      "required": ["id", "name"]
+    },
+    "DocumentCategory": {
+      "title": "DocumentCategory",
+      "description": "Category definition for school records and lesson plans",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Category ID" },
+        "name": { "type": "string", "description": "Category name" },
+        "description": { "type": "string", "description": "Guidelines or description" },
+        "workflowType": { "type": "string", "enum": ["direct_to_principal", "via_lead_then_principal"], "description": "Approval routing workflow" },
+        "allowedExtensions": { "type": "string", "description": "Allowed extensions e.g. doc, docx, pdf, xls, xlsx, ppt, pptx" },
+        "maxSizeMb": { "type": "number", "description": "Maximum file size in MB" },
+        "isActive": { "type": "boolean", "description": "Whether category is active" },
+        "order": { "type": "number", "description": "Display sorting order" }
+      },
+      "required": ["id", "name", "workflowType", "isActive"]
+    },
+    "SchoolDocument": {
+      "title": "SchoolDocument",
+      "description": "Primary submitted document / lesson plan record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Document ID" },
+        "title": { "type": "string", "description": "Document title" },
+        "categoryId": { "type": "string", "description": "Category ID" },
+        "categoryName": { "type": "string", "description": "Category name" },
+        "departmentId": { "type": "string", "description": "Department / Grade block ID" },
+        "departmentName": { "type": "string", "description": "Department name" },
+        "academicYear": { "type": "string", "description": "Academic year (e.g. 2025-2026)" },
+        "semester": { "type": "string", "enum": ["HK1", "HK2", "CaNam"], "description": "Semester" },
+        "subject": { "type": "string", "description": "Subject name" },
+        "gradeClass": { "type": "string", "description": "Class or grade level" },
+        "weekOrPeriod": { "type": "string", "description": "Week number or teaching period" },
+        "notes": { "type": "string", "description": "Submission notes" },
+        "deadline": { "type": "string", "description": "Submission deadline ISO" },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "submitted", "pending_lead", "pending_principal", "need_revision", "resubmitted", "approved", "rejected"],
+          "description": "Current processing state"
+        },
+        "ownerUid": { "type": "string", "description": "UID of submitter teacher" },
+        "ownerName": { "type": "string", "description": "Name of submitter teacher" },
+        "ownerEmail": { "type": "string", "description": "Email of submitter teacher" },
+        "currentVersion": { "type": "number", "description": "Current version sequence number" },
+        "fileUrl": { "type": "string", "description": "Download URL of file" },
+        "fileName": { "type": "string", "description": "Original file name" },
+        "fileSize": { "type": "number", "description": "File size in bytes" },
+        "fileType": { "type": "string", "description": "MIME type or file extension" },
+        "storagePath": { "type": "string", "description": "Cloud Storage storage path" },
+        "reviewedByUid": { "type": "string", "description": "UID of inspector / approver" },
+        "reviewedByName": { "type": "string", "description": "Name of reviewer" },
+        "reviewedAt": { "type": "string", "description": "Review timestamp" },
+        "reviewNotes": { "type": "string", "description": "Review feedback" },
+        "rejectionReason": { "type": "string", "description": "Reason if revision required or rejected" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Update timestamp" }
+      },
+      "required": ["id", "title", "categoryId", "departmentId", "ownerUid", "status"]
+    },
+    "DocumentVersion": {
+      "title": "DocumentVersion",
+      "description": "Historical version snapshot of a document",
+      "type": "object",
+      "properties": {
+        "versionNumber": { "type": "number", "description": "Version index e.g. 1, 2" },
+        "fileUrl": { "type": "string", "description": "Storage download URL" },
+        "fileName": { "type": "string", "description": "File name" },
+        "fileSize": { "type": "number", "description": "File size in bytes" },
+        "storagePath": { "type": "string", "description": "Storage reference" },
+        "submittedAt": { "type": "string", "description": "Submission timestamp" },
+        "submittedByUid": { "type": "string", "description": "Teacher UID" },
+        "submittedByName": { "type": "string", "description": "Teacher name" },
+        "notes": { "type": "string", "description": "Change notes for this version" }
+      },
+      "required": ["versionNumber", "fileUrl", "fileName", "submittedAt", "submittedByUid"]
+    },
+    "DocumentComment": {
+      "title": "DocumentComment",
+      "description": "Review comment, revision request, or workflow action audit entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Comment ID" },
+        "authorUid": { "type": "string", "description": "UID of author" },
+        "authorName": { "type": "string", "description": "Display name of reviewer/teacher" },
+        "authorRole": { "type": "string", "description": "Role of comment author" },
+        "content": { "type": "string", "description": "Comment or feedback message" },
+        "actionType": {
+          "type": "string",
+          "enum": ["comment", "request_revision", "approve", "reject", "submit", "resubmit"],
+          "description": "Workflow action associated with the comment"
+        },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["authorUid", "authorName", "content", "actionType"]
+    },
+    "SystemNotification": {
+      "title": "SystemNotification",
+      "description": "In-app reminder and workflow notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Notification ID" },
+        "targetUid": { "type": "string", "description": "Target recipient UID" },
+        "title": { "type": "string", "description": "Notification title" },
+        "message": { "type": "string", "description": "Notification message" },
+        "type": { "type": "string", "enum": ["deadline", "review", "revision", "approval", "system"], "description": "Notification type" },
+        "linkDocId": { "type": "string", "description": "Associated document ID" },
+        "isRead": { "type": "boolean", "description": "Read flag" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["targetUid", "title", "message", "type", "isRead"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Global school settings and current school year parameters",
+      "type": "object",
+      "properties": {
+        "schoolName": { "type": "string", "description": "Name of primary school" },
+        "currentAcademicYear": { "type": "string", "description": "Current school year e.g. 2025-2026" },
+        "currentSemester": { "type": "string", "description": "Current semester e.g. Học kì 1" },
+        "allowSelfRegistration": { "type": "boolean", "description": "Whether new teachers can sign in pending approval" },
+        "updatedAt": { "type": "string", "description": "Last modified timestamp" }
+      },
+      "required": ["schoolName", "currentAcademicYear"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile with role, department, and active status"
+    },
+    "/admins/{userId}": {
+      "schema": "AdminRecord",
+      "description": "Lookup collection for system administrators"
+    },
+    "/departments/{departmentId}": {
+      "schema": "Department",
+      "description": "Grade blocks (Khối 1 đến Khối 5) and team leads"
+    },
+    "/categories/{categoryId}": {
+      "schema": "DocumentCategory",
+      "description": "School record categories and approval workflow type"
+    },
+    "/documents/{documentId}": {
+      "schema": "SchoolDocument",
+      "description": "Main documents, lesson plans, and status tracking"
+    },
+    "/documents/{documentId}/versions/{versionId}": {
+      "schema": "DocumentVersion",
+      "description": "Historical versions of uploaded files"
+    },
+    "/documents/{documentId}/comments/{commentId}": {
+      "schema": "DocumentComment",
+      "description": "Comments, revision notes, and approval history"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "SystemNotification",
+      "description": "In-app alerts and deadline reminders"
+    },
+    "/system_settings/{configId}": {
+      "schema": "SystemConfig",
+      "description": "School-wide configuration and current semester info"
+    }
+  }
+}

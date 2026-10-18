@@ -1,0 +1,212 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isInitialAdmin() {
+      return isSignedIn() && request.auth.token.email == 'mynhienbobeo@gmail.com';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isInitialAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isApprovedUser() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active'
+        )
+      );
+    }
+
+    function currentUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isVicePrincipal() {
+      return isAdmin() || (isApprovedUser() && currentUserData().role == 'vice_principal');
+    }
+
+    function isLeadOf(depId) {
+      return isApprovedUser() && (
+        currentUserData().role == 'lead' && currentUserData().departmentId == depId
+      );
+    }
+
+    // Admins lookup collection
+    match /admins/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Users profile collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isApprovedUser() || isAdmin());
+      allow list: if isApprovedUser() || isAdmin();
+      
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId && (
+            (isInitialAdmin() && incoming().role == 'admin' && incoming().status == 'active') ||
+            (incoming().status == 'pending' && (incoming().role == 'teacher' || incoming().role == 'lead' || incoming().role == 'vice_principal'))
+          )
+        )
+      );
+
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId &&
+          incoming().uid == existing().uid &&
+          incoming().role == existing().role &&
+          incoming().status == existing().status &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'updatedAt'])
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Grade blocks / Departments
+    match /departments/{departmentId} {
+      allow read: if isApprovedUser() || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Document Categories
+    match /categories/{categoryId} {
+      allow read: if isApprovedUser() || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // School Documents and Lesson Plans
+    match /documents/{documentId} {
+      allow get: if isApprovedUser() && (
+        isAdmin() ||
+        isVicePrincipal() ||
+        resource.data.ownerUid == request.auth.uid ||
+        (currentUserData().role == 'lead' && currentUserData().departmentId == resource.data.departmentId)
+      );
+
+      allow list: if isApprovedUser() && (
+        isAdmin() ||
+        isVicePrincipal() ||
+        resource.data.ownerUid == request.auth.uid ||
+        (currentUserData().role == 'lead' && currentUserData().departmentId == resource.data.departmentId)
+      );
+
+      allow create: if isApprovedUser() && (
+        isAdmin() ||
+        (
+          incoming().ownerUid == request.auth.uid &&
+          incoming().title is string &&
+          incoming().title.size() > 0 &&
+          incoming().title.size() <= 300 &&
+          (incoming().status in ['draft', 'submitted', 'pending_lead', 'pending_principal'])
+        )
+      );
+
+      allow update: if isApprovedUser() && (
+        isAdmin() ||
+        isVicePrincipal() ||
+        (
+          isLeadOf(existing().departmentId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'status', 'reviewedByUid', 'reviewedByName', 'reviewedAt', 'reviewNotes', 'rejectionReason', 'updatedAt'
+          ])
+        ) ||
+        (
+          existing().ownerUid == request.auth.uid &&
+          existing().status != 'approved' &&
+          incoming().ownerUid == existing().ownerUid &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'categoryId', 'categoryName', 'departmentId', 'departmentName',
+            'academicYear', 'semester', 'subject', 'gradeClass', 'weekOrPeriod',
+            'notes', 'deadline', 'status', 'currentVersion', 'fileUrl', 'fileName',
+            'fileSize', 'fileType', 'storagePath', 'updatedAt'
+          ])
+        )
+      );
+
+      allow delete: if isAdmin() || (
+        isApprovedUser() &&
+        existing().ownerUid == request.auth.uid &&
+        existing().status == 'draft'
+      );
+
+      // Versions subcollection
+      match /versions/{versionId} {
+        allow read: if isApprovedUser() && (
+          isAdmin() ||
+          isVicePrincipal() ||
+          get(/databases/$(database)/documents/documents/$(documentId)).data.ownerUid == request.auth.uid ||
+          isLeadOf(get(/databases/$(database)/documents/documents/$(documentId)).data.departmentId)
+        );
+
+        allow create: if isApprovedUser() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/documents/$(documentId)).data.ownerUid == request.auth.uid
+        );
+
+        allow update, delete: if isAdmin();
+      }
+
+      // Comments and review history
+      match /comments/{commentId} {
+        allow read: if isApprovedUser() && (
+          isAdmin() ||
+          isVicePrincipal() ||
+          get(/databases/$(database)/documents/documents/$(documentId)).data.ownerUid == request.auth.uid ||
+          isLeadOf(get(/databases/$(database)/documents/documents/$(documentId)).data.departmentId)
+        );
+
+        allow create: if isApprovedUser() && incoming().authorUid == request.auth.uid && (
+          isAdmin() ||
+          isVicePrincipal() ||
+          get(/databases/$(database)/documents/documents/$(documentId)).data.ownerUid == request.auth.uid ||
+          isLeadOf(get(/databases/$(database)/documents/documents/$(documentId)).data.departmentId)
+        );
+
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // In-app notifications
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.targetUid == request.auth.uid);
+      allow create: if isApprovedUser() || isAdmin();
+      allow update: if isSignedIn() && resource.data.targetUid == request.auth.uid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isSignedIn() && (isAdmin() || resource.data.targetUid == request.auth.uid);
+    }
+
+    // Global settings
+    match /system_settings/{configId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

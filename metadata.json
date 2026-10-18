@@ -1,0 +1,8 @@
+{
+  "name": "Quản lý Hồ sơ Chuyên môn Số",
+  "description": "Hệ thống quản lý, nộp, kiểm tra và phê duyệt hồ sơ chuyên môn số dành cho Trường Tiểu học với 5 khối lớp",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
